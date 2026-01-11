@@ -90,19 +90,30 @@ impl XFixCommandFix {
         let devices_str = &pointer_devices_regex.captures(xinput_output_str).unwrap()["devices"];
 
         let device_id_regex = Regex::new(".*id=(?<id>[0-9]+).*")?;
+        let device_node_regex = Regex::new("Device Node.*\"(?<node>[^\"]+)\"")?;
 
-        let devices = devices_str
+        let device_mapping = devices_str
             .lines()
             .into_iter()
-            .map(|line| {
-                let device_id = device_id_regex.captures(line).unwrap()["id"]
-                    .parse::<u32>()
-                    .unwrap();
-                device_id
+            .filter_map(|line| {
+                let device_id = device_id_regex.captures(line)?["id"].parse::<u32>().ok()?;
+                Some(device_id)
             })
-            .collect::<Vec<_>>();
+            .filter_map(|device_id| {
+                let xinput_props_output = Command::new("xinput")
+                    .arg("--list-props")
+                    .arg(device_id.to_string())
+                    .output()
+                    .ok()?;
+                let xinput_props_output_str = str::from_utf8(&xinput_props_output.stdout).ok()?;
+                let device_node =
+                    device_node_regex.captures(xinput_props_output_str)?["node"].to_string();
 
-        println!("[xfix] Devices: {:?}", devices);
+                Some((device_node, device_id))
+            })
+            .collect::<HashMap<_, _>>();
+
+        println!("Device Mapping: {:?}", device_mapping);
 
         Ok(vec![])
     }
