@@ -1,4 +1,7 @@
-use std::{collections::HashMap, process::Command};
+use std::{
+    collections::{HashMap, hash_map::Keys},
+    process::Command,
+};
 
 use clap::Args;
 use regex::Regex;
@@ -44,7 +47,7 @@ impl XFixCommandFix {
                 let udev_output_str = String::from_utf8(udev_output.stdout).ok()?;
 
                 let udev_properties = udev_output_str
-                    .split("\n")
+                    .lines()
                     .into_iter()
                     .filter_map(|line| line.split_once("="))
                     .map(|(key, value)| (key.to_string(), value.to_string()))
@@ -84,7 +87,20 @@ impl XFixCommandFix {
 
         let pointer_devices_regex =
             Regex::new("Virtual core pointer(.*)\n(?<devices>(.*\n)*)(.*)Virtual core keyboard")?;
-        let devices = &pointer_devices_regex.captures(xinput_output_str).unwrap()["devices"];
+        let devices_str = &pointer_devices_regex.captures(xinput_output_str).unwrap()["devices"];
+
+        let device_id_regex = Regex::new(".*id=(?<id>[0-9]+).*")?;
+
+        let devices = devices_str
+            .lines()
+            .into_iter()
+            .map(|line| {
+                let device_id = device_id_regex.captures(line).unwrap()["id"]
+                    .parse::<u32>()
+                    .unwrap();
+                device_id
+            })
+            .collect::<Vec<_>>();
 
         println!("[xfix] Devices: {:?}", devices);
 
