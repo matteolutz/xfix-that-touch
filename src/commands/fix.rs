@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::Keys},
-    process::Command,
-};
+use std::{collections::HashMap, process::Command};
 
 use clap::Args;
 use regex::Regex;
@@ -80,7 +77,7 @@ impl XFixCommandFix {
 
     fn find_xinput_id<'a>(
         &self,
-        screens: &[XFixTouchscreenWithNode<'a>],
+        screens: Vec<XFixTouchscreenWithNode<'a>>,
     ) -> Result<Vec<XFixTouchscreenWithXinputId<'a>>, Box<dyn std::error::Error>> {
         let xinput_output = Command::new("xinput").args(["list", "--short"]).output()?;
         let xinput_output_str = str::from_utf8(&xinput_output.stdout)?;
@@ -113,9 +110,19 @@ impl XFixCommandFix {
             })
             .collect::<HashMap<_, _>>();
 
-        println!("Device Mapping: {:?}", device_mapping);
+        let screens = screens
+            .into_iter()
+            .map(|screen| {
+                let id = screen
+                    .node
+                    .as_ref()
+                    .and_then(|node| device_mapping.get(node).copied());
 
-        Ok(vec![])
+                XFixTouchscreenWithXinputId { screen, id }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(screens)
     }
 }
 
@@ -125,7 +132,7 @@ impl XFixCommandDelegate for XFixCommandFix {
 
         println!("[xfix] Screens: {:?}", screens_with_node);
 
-        let screens_with_xinput_id = self.find_xinput_id(&screens_with_node)?;
+        let screens_with_xinput_id = self.find_xinput_id(screens_with_node)?;
 
         println!(
             "[xfix] Screens with XInput ID: {:?}",
