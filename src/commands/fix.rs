@@ -1,6 +1,7 @@
 use std::{collections::HashMap, process::Command};
 
 use clap::Args;
+use regex::Regex;
 
 use crate::{
     commands::XFixCommandDelegate,
@@ -13,6 +14,12 @@ const TOUCHSCREEN_TYPE: &str = "ID_INPUT_MOUSE";
 struct XFixTouchscreenWithNode<'a> {
     screen: &'a XFixTouchscreen,
     node: Option<String>,
+}
+
+#[derive(Debug)]
+struct XFixTouchscreenWithXinputId<'a> {
+    screen: XFixTouchscreenWithNode<'a>,
+    id: Option<u32>,
 }
 
 #[derive(Args)]
@@ -34,7 +41,7 @@ impl XFixCommandFix {
                     .output()
                     .ok()?;
 
-                let udev_output_str = str::from_utf8(&udev_output.stdout).ok()?;
+                let udev_output_str = String::from_utf8(udev_output.stdout).ok()?;
 
                 let udev_properties = udev_output_str
                     .split("\n")
@@ -67,13 +74,36 @@ impl XFixCommandFix {
 
         Ok(screens)
     }
+
+    fn find_xinput_id<'a>(
+        &self,
+        screens: &[XFixTouchscreenWithNode<'a>],
+    ) -> Result<Vec<XFixTouchscreenWithXinputId<'a>>, Box<dyn std::error::Error>> {
+        let xinput_output = Command::new("xinput").args(["list", "--short"]).output()?;
+        let xinput_output_str = str::from_utf8(&xinput_output.stdout)?;
+
+        let pointer_devices_regex =
+            Regex::new("Virtual core pointer(.*)\n(?<devices>(.*\n)*)(.*)Virtual core keyboard")?;
+        let devices = &pointer_devices_regex.captures(xinput_output_str).unwrap()["devices"];
+
+        println!("[xfix] Devices: {:?}", devices);
+
+        Ok(vec![])
+    }
 }
 
 impl XFixCommandDelegate for XFixCommandFix {
     fn run(&self, config: &XFixConfig) -> Result<(), Box<dyn std::error::Error>> {
-        let screens = self.find_touchscreen_nodes(&config.touchscreens)?;
+        let screens_with_node = self.find_touchscreen_nodes(&config.touchscreens)?;
 
-        println!("[xfix] Screens: {:?}", screens);
+        println!("[xfix] Screens: {:?}", screens_with_node);
+
+        let screens_with_xinput_id = self.find_xinput_id(&screens_with_node)?;
+
+        println!(
+            "[xfix] Screens with XInput ID: {:?}",
+            screens_with_xinput_id
+        );
 
         Ok(())
     }
