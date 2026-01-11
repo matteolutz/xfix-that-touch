@@ -8,6 +8,7 @@ const CONFIG_FILE_NAME: &'static str = ".xfixtouch.json";
 pub struct XFixTouchscreen {
     pub vendor: String,
     pub id_path: String,
+    pub map_to_output: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

@@ -8,7 +8,7 @@ use crate::{
     config::{XFixConfig, XFixTouchscreen},
 };
 
-const TOUCHSCREEN_TYPE: &str = "ID_INPUT_MOUSE";
+const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
 
 #[derive(Debug)]
 struct XFixTouchscreenWithNode<'a> {
@@ -124,20 +124,39 @@ impl XFixCommandFix {
 
         Ok(screens)
     }
+
+    fn assign_screens_to_outputs(&self, screens: Vec<XFixTouchscreenWithXinputId<'_>>) {
+        for screen in screens {
+            let (Some(xinput_id), Some(output)) =
+                (screen.id, screen.screen.screen.map_to_output.as_ref())
+            else {
+                continue;
+            };
+
+            println!(
+                "[xfix] Mapping device with xinput id {} to output {:?}",
+                xinput_id, output
+            );
+
+            Command::new("xinput")
+                .arg("map-to-output")
+                .arg(xinput_id.to_string())
+                .arg(output);
+        }
+    }
 }
 
 impl XFixCommandDelegate for XFixCommandFix {
     fn run(&self, config: &XFixConfig) -> Result<(), Box<dyn std::error::Error>> {
-        let screens_with_node = self.find_touchscreen_nodes(&config.touchscreens)?;
+        let screens = self.find_touchscreen_nodes(&config.touchscreens)?;
 
-        println!("[xfix] Screens: {:?}", screens_with_node);
+        println!("[xfix] Screens with nodes: {:?}", screens);
 
-        let screens_with_xinput_id = self.find_xinput_id(screens_with_node)?;
+        let screens = self.find_xinput_id(screens)?;
 
-        println!(
-            "[xfix] Screens with XInput ID: {:?}",
-            screens_with_xinput_id
-        );
+        println!("[xfix] Screens with xinput id: {:?}", screens);
+
+        self.assign_screens_to_outputs(screens);
 
         Ok(())
     }
