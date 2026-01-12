@@ -10,7 +10,7 @@ env:
 
 jobs:
   lint_test_and_build:
-    name: Lint, Test and Build demex
+    name: Lint, Test and Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
