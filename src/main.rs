@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::{
-    commands::{XFixCommandDelegate, fix::XFixCommandFix},
+    commands::{XFixCommandDelegate, assign::XFixCommandAssign},
     config::XFixConfig,
 };
 
@@ -10,7 +10,8 @@ mod config;
 
 #[derive(Subcommand)]
 enum XFixCommand {
-    Fix(XFixCommandFix),
+    /// Assign touchscreens to outputs
+    Assign(XFixCommandAssign),
 }
 
 #[derive(Parser)]
@@ -26,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = XFixConfig::load()?;
 
     match args.command {
-        XFixCommand::Fix(fix) => fix.run(&config),
+        XFixCommand::Assign(assign) => assign.run(&config),
     }?;
 
     Ok(())

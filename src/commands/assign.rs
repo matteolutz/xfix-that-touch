@@ -23,9 +23,9 @@ struct XFixTouchscreenWithXinputId<'a> {
 }
 
 #[derive(Args)]
-pub struct XFixCommandFix;
+pub struct XFixCommandAssign;
 
-impl XFixCommandFix {
+impl XFixCommandAssign {
     fn find_touchscreen_nodes<'a>(
         &self,
         screens: &'a [XFixTouchscreen],
@@ -146,7 +146,7 @@ impl XFixCommandFix {
     }
 }
 
-impl XFixCommandDelegate for XFixCommandFix {
+impl XFixCommandDelegate for XFixCommandAssign {
     fn run(&self, config: &XFixConfig) -> Result<(), Box<dyn std::error::Error>> {
         let screens = self.find_touchscreen_nodes(&config.touchscreens)?;
 
