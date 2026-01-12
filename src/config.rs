@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, path::PathBuf};
 
 use serde_derive::{Deserialize, Serialize};
 
@@ -17,13 +17,25 @@ pub struct XFixConfig {
 }
 
 impl XFixConfig {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    fn get_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let home_dir_buf = home::home_dir();
         if home_dir_buf.is_none() {
             return Err("Could not find home directory".into());
         }
 
-        let config_file_path = home::home_dir().unwrap().as_path().join(CONFIG_FILE_NAME);
+        Ok(home::home_dir().unwrap().as_path().join(CONFIG_FILE_NAME))
+    }
+
+    pub fn save(self) -> Result<(), Box<dyn std::error::Error>> {
+        let config_file_path = Self::get_config_path()?;
+        let file = File::open(config_file_path)?;
+
+        serde_json::to_writer(&file, &self)?;
+        Ok(())
+    }
+
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let config_file_path = Self::get_config_path()?;
 
         if !config_file_path.exists() {
             println!(
