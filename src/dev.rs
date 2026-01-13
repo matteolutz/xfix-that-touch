@@ -1,10 +1,71 @@
-use std::{collections::HashMap, process::Command};
+use std::{collections::HashMap, fmt::Display, process::Command};
 
 use regex::Regex;
 
 use crate::config::XFixTouchscreen;
 
+#[allow(unused)]
 const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
+
+pub struct XFixEventNode {
+    path: String,
+    properties: HashMap<String, String>,
+}
+
+impl XFixEventNode {
+    pub fn new(path: String, model_name: String, vendor: String, id_path: String) -> Self {
+        Self {
+            path,
+            properties: [
+                ("ID_MODEL".to_string(), model_name),
+                ("ID_VENDOR".to_string(), vendor),
+                ("ID_PATH".to_string(), id_path),
+            ]
+            .into(),
+        }
+    }
+
+    pub fn event_path(&self) -> &str {
+        &self.path
+    }
+
+    pub fn vendor(&self) -> Option<&str> {
+        self.properties.get("ID_VENDOR").map(|s| s.as_str())
+    }
+
+    pub fn model(&self) -> Option<&str> {
+        self.properties.get("ID_MODEL").map(|s| s.as_str())
+    }
+
+    pub fn id_path(&self) -> Option<&str> {
+        self.properties.get("ID_PATH").map(|s| s.as_str())
+    }
+
+    pub fn to_touchscreen(
+        &self,
+        mapping: Option<String>,
+    ) -> Result<XFixTouchscreen, Box<dyn std::error::Error>> {
+        Ok(XFixTouchscreen {
+            vendor: self.vendor().ok_or("Vendor not found")?.to_string(),
+            id_path: self.id_path().ok_or("ID_PATH not found")?.to_string(),
+            map_to_output: mapping,
+        })
+    }
+}
+
+impl Display for XFixEventNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(vendor) = self.vendor() {
+            write!(f, "{} - ", vendor)?;
+        }
+
+        if let Some(model) = self.model() {
+            write!(f, "{} ({})", model, self.path)
+        } else {
+            write!(f, "{}", self.path)
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct XFixTouchscreenWithNode<'a> {
@@ -18,46 +79,72 @@ pub struct XFixTouchscreenWithXinputId<'a> {
     id: Option<u32>,
 }
 
+pub fn find_all_touchscreens_nodes() -> Result<Vec<XFixEventNode>, Box<dyn std::error::Error>> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(vec![
+            XFixEventNode::new(
+                "/dev/input/event0".to_string(),
+                "Touchscreen 1".to_string(),
+                "Manufacturer".to_string(),
+                "ID_PATH1".to_string(),
+            ),
+            XFixEventNode::new(
+                "/dev/input/event1".to_string(),
+                "Touchscreen 2".to_string(),
+                "Manufacturer".to_string(),
+                "ID_PATH2".to_string(),
+            ),
+        ])
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let all_touchscreen_nodes = glob::glob("/dev/input/event*")?
+            .into_iter()
+            .filter_map(|res| res.ok())
+            .filter_map(|path| {
+                let device_name = path.display().to_string();
+                let udev_output = Command::new("udevadm")
+                    .args(["info", "--query=property"])
+                    .arg(format!("--name={}", device_name))
+                    .output()
+                    .ok()?;
+
+                let udev_output_str = String::from_utf8(udev_output.stdout).ok()?;
+
+                let udev_properties = udev_output_str
+                    .lines()
+                    .into_iter()
+                    .filter_map(|line| line.split_once("="))
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+                    .collect::<HashMap<_, _>>();
+
+                Some((device_name, udev_properties))
+            })
+            .filter(|(_, props)| props.get(TOUCHSCREEN_TYPE).is_some_and(|val| val == "1"))
+            .map(|(path, properties)| XFixEventNode { path, properties })
+            .collect::<Vec<_>>();
+
+        Ok(all_touchscreen_nodes)
+    }
+}
+
 pub fn find_touchscreen_nodes<'a>(
-    screens: &'a [XFixTouchscreen],
+    screens: impl IntoIterator<Item = &'a XFixTouchscreen>,
 ) -> Result<Vec<XFixTouchscreenWithNode<'a>>, Box<dyn std::error::Error>> {
-    let all_touchscreen_nodes = glob::glob("/dev/input/event*")?
-        .into_iter()
-        .filter_map(|res| res.ok())
-        .filter_map(|path| {
-            let device_name = path.display().to_string();
-            let udev_output = Command::new("udevadm")
-                .args(["info", "--query=property"])
-                .arg(format!("--name={}", device_name))
-                .output()
-                .ok()?;
-
-            let udev_output_str = String::from_utf8(udev_output.stdout).ok()?;
-
-            let udev_properties = udev_output_str
-                .lines()
-                .into_iter()
-                .filter_map(|line| line.split_once("="))
-                .map(|(key, value)| (key.to_string(), value.to_string()))
-                .collect::<HashMap<_, _>>();
-
-            Some((device_name, udev_properties))
-        })
-        .filter(|(_, props)| props.get(TOUCHSCREEN_TYPE).is_some_and(|val| val == "1"))
-        .collect::<Vec<_>>();
+    let all_touchscreen_nodes = find_all_touchscreens_nodes()?;
 
     let screens = screens
-        .iter()
+        .into_iter()
         .map(|s| {
             let node = all_touchscreen_nodes
                 .iter()
-                .find(|(_, props)| {
-                    props
-                        .get("ID_VENDOR")
-                        .is_some_and(|vendor| vendor == &s.vendor)
-                        && props.get("ID_PATH").is_some_and(|path| path == &s.id_path)
+                .find(|node| {
+                    node.vendor().is_some_and(|vendor| vendor == &s.vendor)
+                        && node.id_path().is_some_and(|path| path == &s.id_path)
                 })
-                .map(|(node, _)| node.clone());
+                .map(|node| node.path.clone());
 
             XFixTouchscreenWithNode { screen: s, node }
         })
@@ -132,5 +219,34 @@ pub fn assign_screens_to_outputs(screens: Vec<XFixTouchscreenWithXinputId<'_>>) 
             .arg("map-to-output")
             .arg(xinput_id.to_string())
             .arg(output);
+    }
+}
+
+pub fn find_connected_video_outputs() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(vec![
+            "DP-1".to_string(),
+            "HDMI-1".to_string(),
+            "VGA-1".to_string(),
+        ])
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let output_list = Command::new("xrandr").output()?;
+        let output_list_str = str::from_utf8(&output_list.stdout)?;
+
+        let output_regex = Regex::new(r"^(?<output>.*).*(\sconnected).*$").unwrap();
+
+        let connected_outputs = output_list_str
+            .lines()
+            .filter_map(|line| {
+                let captures = output_regex.captures(line)?;
+                Some(captures["output"].to_string())
+            })
+            .collect::<Vec<_>>();
+
+        Ok(connected_outputs)
     }
 }
