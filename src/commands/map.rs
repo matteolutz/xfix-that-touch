@@ -5,7 +5,7 @@ use dialoguer::{
 };
 
 use crate::{
-    commands::XFixCommandDelegate,
+    commands::{XFixCommandDelegate, assign::XFixCommandAssign},
     config::XFixConfig,
     dev::{find_all_touchscreens_nodes, find_connected_video_outputs},
 };
@@ -64,6 +64,9 @@ impl XFixCommandDelegate for XFixCommandMap {
 
         let mut new_config = config.clone();
         new_config.add_touchscreen(touchscreen);
+
+        println!("[xfix] Running assign command...");
+        XFixCommandAssign.run(&new_config)?;
 
         Ok(Some(new_config))
     }
