@@ -5,7 +5,8 @@ use regex::Regex;
 use crate::config::XFixTouchscreen;
 
 #[allow(unused)]
-const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
+// const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
+const TOUCHSCREEN_TYPE: &str = "ID_INPUT_MOUSE";
 
 pub struct XFixEventNode {
     path: String,
