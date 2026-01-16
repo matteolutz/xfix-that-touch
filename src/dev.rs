@@ -5,8 +5,7 @@ use regex::Regex;
 use crate::config::XFixTouchscreen;
 
 #[allow(unused)]
-// const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
-const TOUCHSCREEN_TYPE: &str = "ID_INPUT_MOUSE";
+const TOUCHSCREEN_TYPE: &str = "ID_INPUT_TOUCHSCREEN";
 
 pub struct XFixEventNode {
     path: String,
@@ -203,7 +202,9 @@ pub fn find_xinput_id<'a>(
     Ok(screens)
 }
 
-pub fn assign_screens_to_outputs(screens: Vec<XFixTouchscreenWithXinputId<'_>>) {
+pub fn assign_screens_to_outputs(
+    screens: Vec<XFixTouchscreenWithXinputId<'_>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     for screen in screens {
         let (Some(xinput_id), Some(output)) =
             (screen.id, screen.screen.screen.map_to_output.as_ref())
@@ -219,8 +220,11 @@ pub fn assign_screens_to_outputs(screens: Vec<XFixTouchscreenWithXinputId<'_>>) 
         Command::new("xinput")
             .arg("map-to-output")
             .arg(xinput_id.to_string())
-            .arg(output);
+            .arg(output)
+            .output()?;
     }
+
+    Ok(())
 }
 
 pub fn find_connected_video_outputs() -> Result<Vec<String>, Box<dyn std::error::Error>> {

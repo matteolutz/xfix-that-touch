@@ -23,7 +23,7 @@ impl XFixCommandDelegate for XFixCommandAssign {
 
         println!("[xfix] Assigning {} touchscreens", screens.len());
 
-        assign_screens_to_outputs(screens);
+        assign_screens_to_outputs(screens)?;
 
         println!("[xfix] Done.");
 
